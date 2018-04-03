@@ -36,14 +36,22 @@ BOT_NAME = 'gplay_store'
 
 SPIDER_MODULES = ['gplay_store.spiders']
 NEWSPIDER_MODULE = 'gplay_store.spiders'
-CONCURRENT_REQUESTS_PER_DOMAIN = 12
-CONCURRENT_REQUESTS = 12
+CONCURRENT_REQUESTS_PER_DOMAIN = 30
+CONCURRENT_REQUESTS = 30
 ITEM_PIPELINES = {
     'gplay_store.pipelines.GplayPipeline': 1
 }
 
-# Crawl responsibly by identifying yourself (and your website) on the user-agent
-USER_AGENT = 'devin wieker'
+DOWNLOADER_MIDDLEWARES = {
+    # 'scproxymesh.SimpleProxymeshMiddleware': 100,
+    # 'scrapy_proxies.RandomProxy': 100,
+    'scrapy.downloadermiddlewares.useragent.UserAgentMiddleware': None,
+    'scrapy_fake_useragent.middleware.RandomUserAgentMiddleware': 620,
+}
+
+PROXY_LIST = '/home/ubuntu/PredictiveCapitalism/scapers/proxies.txt'
+PROXY_MODE = 0
+
 
 REACTOR_THREADPOOL_MAXSIZE = 20
 LOG_LEVEL = 'INFO'
