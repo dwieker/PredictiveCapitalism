@@ -12,6 +12,11 @@ import time
 from datetime import datetime
 import os
 import requests
+from pyvirtualdisplay import Display
+import string
+
+display = Display(visible=0, size=(1024, 768))
+display.start()
 
 DATEID = datetime.now().strftime("%Y-%m-%d")
 Base = declarative_base(cls=DeferredReflection)
@@ -25,7 +30,7 @@ CATEGORIES = [
     'REAL ESTATE', 'RETAIL', 'ROBOTICS', 'SALES', 'SECURITY', 'SHARING ECONOMY', 'SOCIAL NETWORKS',
     'SOFTWARE DEV', 'STARTUPS', 'TRAVEL', 'OTHER'
 ]
-browser = webdriver.Chrome()
+browser = webdriver.Firefox()
 
 class StartupTracker(Base):
     __tablename__ = "dim_startuptracker"
@@ -51,75 +56,81 @@ session = Session()
 
 url = 'https://startuptracker.io/discover?filters%5B0%5D%5Bcc%5D%5Bq%5D=US&filters%5B1%5D%5Bbm%5D%5Bq%5D=ACCOUNTING%20AND%20LEGAL&page=0'
 for cat in CATEGORIES:
-    payload = {
-        'filters[0][cc][q]': 'US',
-        'filters[1][bm][q]': cat,
-        'page': 0
-    }
-    cat_url = 'https://startuptracker.io/discover?' + urlencode(payload, True)
-    response = requests.get(cat_url)
-    soup = BeautifulSoup(response.text, 'lxml')
-    pages = soup.find_all(attrs={'data-page':re.compile(r".*")})
-
-    if len(pages) > 0:
-        num_pages = int(max([item['data-page'] for item in pages])) + 1
-    else:
-        num_pages = 0
-
-    for page in range(num_pages):
+    for letter in string.ascii_uppercase:
         payload = {
             'filters[0][cc][q]': 'US',
             'filters[1][bm][q]': cat,
-            'page': page
+            'filters[2][cn][q]': letter,
+            'page': 0
         }
         cat_url = 'https://startuptracker.io/discover?' + urlencode(payload, True)
+        print("Requesting %s..." % cat_url)
         response = requests.get(cat_url)
-        soup = BeautifulSoup(response.content, 'lxml')
-        links = ['https://startuptracker.io' + link['href'] for link in soup.find_all(href=re.compile(r'^/startups/'))]
-        print("Number of links: ", len(links))
-        print(links)
-        for link in links:
-            try:
-                print("Parsing...", link)
-                browser.get(link)
-                browser.implicitly_wait(10)
+        soup = BeautifulSoup(response.text, 'lxml')
+        pages = soup.find_all(attrs={'data-page':re.compile(r".*")})
 
-                # Wait for the company webpage link to load
-                browser.find_element_by_class_name('_w0x3akc')
+        if len(pages) > 0:
+            num_pages = int(max([item['data-page'] for item in pages])) + 1
+        else:
+            num_pages = 1
 
-                soup = BeautifulSoup(browser.page_source)
-                data = {}
-                for i, item in enumerate(soup.find_all(class_='_1xeadpo')):
-                    subitems = [subitem.text for subitem in item.find_all('p')]
-                    if i == 0:
-                        data['founded_date'] = subitems[0] + ' ' + subitems[1]
-                    elif i == 1:
-                        data['location'] = subitems[0] + ' ' + subitems[1]
-                    elif subitems[1] == 'pageviews p.m.':
-                        data['monthly_pageviews'] = subitems[0]
-                    elif subitems[1] == 'in team':
-                        data['team_members'] = subitems[0]
-                    elif subitems[1] == 'amount raised':
-                        data['amount_raised'] = subitems[0]
-                    elif subitems[1] == 'global rank':
-                        data['global_rank'] = subitems[0]
-                    else:
-                        data[subitems[1]] = subitems[0]
-                data['markets'] = '__'.join([item.text for item in soup.find_all(class_='_14jrgnk8')])
-                data['products'] = '__'.join([item.text for item in soup.find_all(class_='_sz431i8')])
-                data['revenue_model'] = [item.text for item in soup.find_all(class_='_1sj8tpk8')]
-                data['website'] = soup.find(class_='_w0x3akc')['href']
-                data['description'] = soup.find(class_='_qgzmqh').text
-                data['name'] = soup.find(class_='_1vj0t0j').text
-                data['url'] = link
-                data['category'] = cat
-                data['ds'] = DATEID
-
+        for page in range(num_pages):
+            payload = {
+                'filters[0][cc][q]': 'US',
+                'filters[1][bm][q]': cat,
+                'filters[2][cn][q]': letter,
+                'page': page
+            }
+            cat_url = 'https://startuptracker.io/discover?' + urlencode(payload, True)
+            response = requests.get(cat_url)
+            soup = BeautifulSoup(response.content, 'lxml')
+            links = ['https://startuptracker.io' + link['href'] for link in soup.find_all(href=re.compile(r'^/startups/'))]
+            print("Number of links: ", len(links))
+            print(links)
+            for link in links:
                 try:
-                    session.bulk_insert_mappings(StartupTracker, [data])
-                    session.commit()
+                    print("Parsing...", link)
+                    browser.get(link)
+                    browser.implicitly_wait(10)
+
+                    # Wait for the company webpage link to load
+                    browser.find_element_by_class_name('_w0x3akc')
+
+                    soup = BeautifulSoup(browser.page_source)
+                    data = {}
+                    for i, item in enumerate(soup.find_all(class_='_1xeadpo')):
+                        subitems = [subitem.text for subitem in item.find_all('p')]
+                        if i == 0:
+                            data['founded_date'] = subitems[0] + ' ' + subitems[1]
+                        elif i == 1:
+                            data['location'] = subitems[0] + ' ' + subitems[1]
+                        elif subitems[1] == 'pageviews p.m.':
+                            data['monthly_pageviews'] = subitems[0]
+                        elif subitems[1] == 'in team':
+                            data['team_members'] = subitems[0]
+                        elif subitems[1] == 'amount raised':
+                            data['amount_raised'] = subitems[0]
+                        elif subitems[1] == 'global rank':
+                            data['global_rank'] = subitems[0]
+                        else:
+                            data[subitems[1]] = subitems[0]
+                    data['markets'] = '__'.join([item.text for item in soup.find_all(class_='_14jrgnk8')])
+                    data['products'] = '__'.join([item.text for item in soup.find_all(class_='_sz431i8')])
+                    data['revenue_model'] = [item.text for item in soup.find_all(class_='_1sj8tpk8')]
+                    data['website'] = soup.find(class_='_w0x3akc')['href']
+                    data['description'] = soup.find(class_='_qgzmqh').text
+                    data['name'] = soup.find(class_='_1vj0t0j').text
+                    data['url'] = link
+                    data['category'] = cat
+                    data['ds'] = DATEID
+
+                    print(data)
+
+                    try:
+                        session.bulk_insert_mappings(StartupTracker, [data])
+                        session.commit()
+                    except Exception as e:
+                        session.rollback()
+                        print(e)
                 except Exception as e:
-                    session.rollback()
                     print(e)
-            except Exception as e:
-                print(e)
